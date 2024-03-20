@@ -1,7 +1,6 @@
 import selectors
 import socket
 import sys
-
 from message.client_message import ClientMessage
 from message.server_message import ServerMessage
 
@@ -23,7 +22,27 @@ def register():
     :return: None
     """
     # TODO
-    pass
+    message = {'action': 'register', 'ip': ANTHILL_HOST, 'port': ANTHILL_PORT, 'type': 'hive'}
+    sel = selectors.DefaultSelector()
+    request = create_request(message)
+    start_connection(sel, DISCOVERY_HOST, DISCOVERY_PORT, request)
+
+    try:
+        while True:
+            events = sel.select(timeout=1)
+            for key, mask in events:
+                message = key.data
+                try:
+                    message.process_events(mask)
+                except Exception:
+                    print(f'Error: Exception for {message.ipaddr}')
+                    message.close()
+            if not sel.get_map():
+                break
+    except KeyboardInterrupt:
+        print('Caught keyboard interrupt, exiting')
+    finally:
+        sel.close()
 
 
 def game():
@@ -32,6 +51,15 @@ def game():
     :return:
     """
     # TODO
+    sel = selectors.DefaultSelector()
+    lsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # Avoid bind() exception: OSError: [Errno 48] Address already in use
+    lsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    lsock.bind((ANTHILL_HOST, ANTHILL_PORT))
+    lsock.listen()
+    print(f'Discovery: listening on {(ANTHILL_HOST, ANTHILL_PORT)}')
+    lsock.setblocking(False)
+    sel.register(lsock, selectors.EVENT_READ, data=None)
 
 def process_action(message):
     """
@@ -40,7 +68,19 @@ def process_action(message):
     :return:
     """
     # TODO
-    pass
+    if DEBUG:
+        print(f'Discovery/process_action: event={message.event}')
+    if message.event == 'READ':
+        action = message.request['action']
+        if action == 'round':
+            service_uuid = '["N", "S"]'
+            print(service_uuid)
+            message.response = service_uuid
+        if action == 'quit':
+            return True
+
+        message.set_selector_events_mask('w')
+
 
 
 
